@@ -63,7 +63,8 @@ def _get_endpoint() -> Optional[object]:
     # Legacy API: activate the IAudioEndpointVolume interface via COM.
     try:
         from pycaw.pycaw import IAudioEndpointVolume  # type: ignore
-        from comtypes import CLSCTX_ALL, POINTER, cast  # type: ignore
+        from comtypes import CLSCTX_ALL  # type: ignore
+        from ctypes import POINTER, cast
 
         interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         return cast(interface, POINTER(IAudioEndpointVolume))

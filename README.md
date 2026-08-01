@@ -1,6 +1,6 @@
-# Jimmy — Always-Listening Voice Assistant for Windows
+# Jimmy Assistant — Always-Listening Voice Assistant for Windows
 
-Jimmy is a local, extensible voice assistant that:
+Jimmy Assistant is a local, extensible voice assistant that:
 
 - **Wakes on "Hey Jimmy"** (Vosk small Indian-English model, offline).
   The wake phrase is a common name Vosk transcribes reliably even on

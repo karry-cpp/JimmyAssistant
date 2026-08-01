@@ -60,8 +60,8 @@ class Settings(BaseSettings):
 
     # --- TTS ---------------------------------------------------------------
     tts_enabled: bool = True
-    tts_voice_en: str = "en-US-GuyNeural"
-    tts_voice_hi: str = "hi-IN-MadhurNeural"
+    tts_voice_en: str = "en-IN-NeerjaNeural"
+    tts_voice_hi: str = "hi-IN-SwaraNeural"
     tts_rate: str = "+0%"
 
     # --- Safety ------------------------------------------------------------

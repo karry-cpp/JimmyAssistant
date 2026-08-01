@@ -42,7 +42,7 @@ _ALIASES: dict[str, str] = {
     # Editors / IDEs
     "notepad": "notepad",
     "notepad plus plus": "notepad++",
-    "notepad ": "notepad",
+    "notepad++": "notepad++",
     "code": "code",
     "vs code": "code",
     "vscode": "code",

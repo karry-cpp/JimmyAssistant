@@ -27,7 +27,7 @@ Rules for tool use:
    reasoning from the user's prompt — call `answer.direct` with the
    concise answer. Do NOT say you lack tools for these; `answer.direct`
    is the tool for them.
-4. When calling `youtube_play` or any search tool, keep the query in
+4. When calling `youtube.play` or any search tool, keep the query in
    the user's original language. Do NOT translate Hindi song titles
    to English. "aaoge jab tum" stays "aaoge jab tum".
 5. For destructive actions (shutdown, restart, hibernate), just call
