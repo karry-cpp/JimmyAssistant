@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-from typing import Annotated, Tuple
+from typing import Annotated, Dict, Tuple
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -63,6 +64,11 @@ class Settings(BaseSettings):
     tts_voice_en: str = "en-IN-NeerjaNeural"
     tts_voice_hi: str = "hi-IN-SwaraNeural"
     tts_rate: str = "+0%"
+    tts_low_latency: bool = False
+
+    # --- WhatsApp automation ----------------------------------------------
+    whatsapp_contacts: Annotated[Dict[str, str], NoDecode] = {}
+    whatsapp_auto_send: bool = False
 
     # --- Safety ------------------------------------------------------------
     confirm_destructive: bool = True
@@ -101,9 +107,40 @@ class Settings(BaseSettings):
         v = value.strip().upper()
         return v if v in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"} else "INFO"
 
+    @field_validator("whatsapp_contacts", mode="before")
+    @classmethod
+    def _parse_whatsapp_contacts(cls, value: object) -> Dict[str, str]:
+        # CSV format: "sid original:+919999999999,mom:+919888888888"
+        if isinstance(value, dict):
+            out: Dict[str, str] = {}
+            for k, v in value.items():
+                name = str(k).strip().lower()
+                phone = str(v).strip()
+                if name and phone:
+                    out[name] = phone
+            return out
+        if isinstance(value, str):
+            out: Dict[str, str] = {}
+            for chunk in value.split(","):
+                part = chunk.strip()
+                if not part or ":" not in part:
+                    continue
+                name, phone = part.split(":", 1)
+                n = name.strip().lower()
+                p = phone.strip()
+                if n and p:
+                    out[n] = p
+            return out
+        return {}
+
     # --- Convenience -------------------------------------------------------
     @property
     def project_root(self) -> Path:
+        # In packaged/frozen runs (e.g. PyInstaller), source files can be
+        # extracted to a transient temp directory. Use the executable folder
+        # so relative model/cache paths stay stable across launches.
+        if getattr(sys, "frozen", False):
+            return Path(sys.executable).resolve().parent
         return Path(__file__).resolve().parents[2]
 
     def resolve_path(self, relative_or_absolute: str) -> Path:

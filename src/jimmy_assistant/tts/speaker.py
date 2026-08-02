@@ -59,12 +59,14 @@ class Speaker:
         voice_en: str = "en-IN-NeerjaNeural",
         voice_hi: str = "hi-IN-SwaraNeural",
         rate: str = "+0%",
+        low_latency: bool = True,
         cache_dir: Optional[Path] = None,
     ) -> None:
         self._enabled = enabled
         self._voice_en = voice_en
         self._voice_hi = voice_hi
         self._rate = rate
+        self._low_latency = low_latency
         self._cache_dir = Path(cache_dir) if cache_dir else None
         self._cache: Dict[str, Path] = {}
 
@@ -164,10 +166,12 @@ class Speaker:
             return False
 
     # -- public API -----------------------------------------------------
-    def speak(self, text: str, lang: Optional[str] = None) -> None:
+    def speak(self, text: str, lang: Optional[str] = None, drop_pending: bool = False) -> None:
         """Queue ``text`` for TTS. Returns immediately."""
         if not self._enabled or not text or not text.strip():
             return
+        if drop_pending:
+            self._clear_pending_queue()
         self._queue.put((text, lang or "en", None))
 
     def speak_and_wait(self, text: str, lang: Optional[str] = None, timeout: float = 15.0) -> None:
@@ -183,6 +187,25 @@ class Speaker:
         """Signal the worker to exit and wait briefly for it."""
         self._queue.put(None)
         self._worker.join(timeout=2.0)
+
+    def _clear_pending_queue(self) -> None:
+        """Drop queued (not-yet-playing) utterances.
+
+        Useful when a fresh response should start immediately instead of
+        waiting behind stale confirmations/status lines.
+        """
+        while True:
+            try:
+                item = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            if item is None:
+                # Preserve shutdown signal if it was queued.
+                self._queue.put(None)
+                break
+            _, _, done = item
+            if done is not None:
+                done.set()
 
     # -- optional low-latency wake-ack ----------------------------------
     @staticmethod
@@ -230,6 +253,25 @@ class Speaker:
         """
         effective_lang = "hi" if _has_devanagari(text) else "en"
         if self._cached_playback(text):
+            return
+
+        # For low-latency mode, prefer local SAPI first for immediate start.
+        # Edge remains available as a quality fallback.
+        if self._low_latency:
+            pyttsx = self._get_pyttsx3()
+            if pyttsx is not None:
+                try:
+                    if pyttsx.speak(text, _lang=effective_lang):
+                        return
+                except Exception:  # noqa: BLE001
+                    logger.exception("pyttsx3 raised for %r", text)
+
+            edge = self._get_edge()
+            if edge is not None:
+                try:
+                    edge.speak(text, lang=effective_lang)
+                except Exception:  # noqa: BLE001
+                    logger.exception("edge-tts raised for %r", text)
             return
 
         edge = self._get_edge()

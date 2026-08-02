@@ -76,6 +76,18 @@ def _make_registry() -> ActionRegistry:
         _handler_boom,
         schema=ToolSchema(description="Broken.", parameters={"type": "object", "properties": {}, "required": []}),
     )
+    r.register(
+        "window.control",
+        _handler_ok,
+        schema=ToolSchema(
+            description="Control current window.",
+            parameters={
+                "type": "object",
+                "properties": {"operation": {"type": "string"}},
+                "required": ["operation"],
+            },
+        ),
+    )
     return r
 
 
@@ -207,6 +219,23 @@ class TestAgentLimits:
         assert outcome.reached_limit is True
         assert len(outcome.steps) >= 3
 
+    def test_blocks_duplicate_tool_calls(self) -> None:
+        llm = _FakeLLM(
+            [
+                ChatResponse(tool_calls=[ToolCall(name="youtube.play", arguments={"query": "x"})]),
+                ChatResponse(tool_calls=[ToolCall(name="youtube.play", arguments={"query": "x"})]),
+                ChatResponse(content="Done."),
+            ]
+        )
+        agent = Agent(registry=_make_registry(), llm=llm, max_steps=4)
+        outcome = agent.run("play x")
+
+        assert len(outcome.steps) == 2
+        assert outcome.steps[0].result_ok is True
+        assert outcome.steps[1].result_ok is False
+        assert "duplicate tool call blocked" in outcome.steps[1].result_summary
+        assert outcome.final_message == "Done."
+
 
 class TestRegistryToolsAPI:
     def test_openai_tools_schema(self) -> None:
@@ -215,6 +244,7 @@ class TestRegistryToolsAPI:
         names = {t["function"]["name"] for t in tools}
         assert "youtube.play" in names
         assert "power.hibernate" in names
+        assert "window.control" in names
         yt = next(t for t in tools if t["function"]["name"] == "youtube.play")
         assert yt["function"]["parameters"]["required"] == ["query"]
 

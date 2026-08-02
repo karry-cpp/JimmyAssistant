@@ -111,6 +111,7 @@ class Agent:
             {"role": "system", "content": AGENT_SYSTEM_PROMPT},
             {"role": "user", "content": transcript},
         ]
+        call_counts: Dict[tuple[str, str], int] = {}
 
         for step_idx in range(self._max_steps):
             response = self._llm.chat(messages=messages, tools=tools)
@@ -143,7 +144,24 @@ class Agent:
             messages.append(assistant_msg)
 
             for call in response.tool_calls:
-                step = self._execute_call(call)
+                args_json = json.dumps(call.arguments, sort_keys=True, ensure_ascii=True)
+                signature = (call.name, args_json)
+                seen = call_counts.get(signature, 0)
+                call_counts[signature] = seen + 1
+
+                if seen >= 1:
+                    step = AgentStep(
+                        tool_name=call.name,
+                        arguments=dict(call.arguments),
+                        result_ok=False,
+                        result_summary=(
+                            "duplicate tool call blocked; use previous tool result and respond"
+                        ),
+                    )
+                    logger.warning("Blocked duplicate tool call %s args=%s", call.name, args_json)
+                    self._listener.on_tool_result(call.name, False, step.result_summary)
+                else:
+                    step = self._execute_call(call)
                 outcome.steps.append(step)
                 messages.append(
                     {
@@ -202,11 +220,12 @@ class Agent:
         """Pick the best line to speak back to the user."""
         if outcome.final_message:
             return outcome.final_message
-        # No LLM reply: summarize the last executed tool.
+        # No LLM reply: prefer the last successful tool before surfacing errors.
+        for step in reversed(outcome.steps):
+            if step.tool_name and step.result_ok:
+                return step.result_summary or "Done."
         for step in reversed(outcome.steps):
             if step.tool_name:
-                if step.result_ok:
-                    return step.result_summary or "Done."
                 return f"Sorry, that didn't work: {step.result_summary}"
         return "Sorry, I didn't do anything."
 

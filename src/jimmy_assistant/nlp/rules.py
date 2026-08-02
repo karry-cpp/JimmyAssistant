@@ -52,8 +52,20 @@ def _app_slot(m: "re.Match[str]") -> dict:
     return {"app": m.group("app").strip()}
 
 
+def _app_close_slot(m: "re.Match[str]") -> dict:
+    app = m.group("app").strip()
+    app = re.sub(r"\b(browser|app|application|window)\b$", "", app, flags=re.IGNORECASE).strip()
+    return {"app": app}
+
+
 def _level_slot(m: "re.Match[str]") -> dict:
     return {"level": m.group("level")}
+
+
+def _wa_slot(m: "re.Match[str]") -> dict:
+    contact = (m.groupdict().get("contact") or "").strip()
+    message = (m.groupdict().get("message") or "").strip()
+    return {"contact": contact, "message": message}
 
 
 # --- Order matters: more specific patterns before generic ones. -----------
@@ -116,7 +128,13 @@ _PATTERNS: List[Tuple[str, Pattern[str], callable]] = [
     (A.ACTION_OPEN_THING, _c(r"^(?:open|show)\s+(?:the\s+)?folder\s+(?P<target>.+?)$"), _target_slot),
     (A.ACTION_OPEN_THING, _c(r"^(?:open|show)\s+(?:the\s+)?file\s+(?P<target>.+?)$"), _target_slot),
 
+    # ---- WhatsApp send -------------------------------------------------
+    (A.ACTION_WHATSAPP_SEND, _c(r"^(?:open\s+)?whatsapp\s+and\s+send\s+(?:a\s+)?message\s+to\s+(?P<contact>.+?)\s+(?:saying|that\s+says|with\s+message)\s+(?P<message>.+)$"), _wa_slot),
+    (A.ACTION_WHATSAPP_SEND, _c(r"^send\s+(?:a\s+)?whatsapp\s+message\s+to\s+(?P<contact>.+?)\s+(?:saying|that\s+says|with\s+message)\s+(?P<message>.+)$"), _wa_slot),
+
     # ---- Launch apps ---------------------------------------------------
+    (A.ACTION_APP_CLOSE, _c(r"^(?:close|quit|exit|terminate|kill)\s+(?P<app>.+?)$"), _app_close_slot),
+    (A.ACTION_APP_CLOSE, _c(r"^(?P<app>.+?)\s+(?:app|application|browser)?\s*(?:close|quit|exit|band|bandh)\s*(?:kar\s*(do|de)|karo)?$"), _app_close_slot),
     (A.ACTION_APP_LAUNCH, _c(r"^(?:open|launch|start)\s+(?P<app>.+?)$"), _app_slot),
     (A.ACTION_APP_LAUNCH, _c(r"^(?P<app>.+?)\s+(kholo|khol\s*do|chalao|start\s*karo)$"), _app_slot),
 
@@ -149,7 +167,9 @@ class RulesParser:
                 A.ACTION_YOUTUBE_PLAY,
                 A.ACTION_WEB_SEARCH,
                 A.ACTION_APP_LAUNCH,
+                A.ACTION_APP_CLOSE,
                 A.ACTION_OPEN_THING,
+                A.ACTION_WHATSAPP_SEND,
             } and not any(slots.values()):
                 continue
             logger.info("Rules matched %s slots=%s", action, slots)

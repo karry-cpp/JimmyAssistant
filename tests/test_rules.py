@@ -181,6 +181,31 @@ class TestApps:
         assert intent.name == A.ACTION_APP_LAUNCH
         assert intent.slots.get("app") == expected_app
 
+    @pytest.mark.parametrize(
+        "utterance, expected_app",
+        [
+            ("close edge browser", "edge"),
+            ("quit chrome", "chrome"),
+            ("notepad band karo", "notepad"),
+        ],
+    )
+    def test_close(self, utterance: str, expected_app: str) -> None:
+        intent = parser.parse(utterance)
+        assert intent is not None
+        assert intent.name == A.ACTION_APP_CLOSE
+        assert intent.slots.get("app") == expected_app
+
+
+class TestWhatsapp:
+    def test_send_message_pattern(self) -> None:
+        intent = parser.parse(
+            "open whatsapp and send a message to sid original saying I will be there in 10 minutes"
+        )
+        assert intent is not None
+        assert intent.name == A.ACTION_WHATSAPP_SEND
+        assert intent.slots.get("contact") == "sid original"
+        assert "10 minutes" in (intent.slots.get("message") or "")
+
 
 class TestWebSearch:
     def test_search_google(self) -> None:

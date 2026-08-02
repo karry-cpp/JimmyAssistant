@@ -14,6 +14,7 @@ ACTION_SLEEP = "power.sleep"
 ACTION_LOCK = "power.lock"
 
 ACTION_APP_LAUNCH = "apps.launch"
+ACTION_APP_CLOSE = "apps.close"
 
 ACTION_VOLUME_UP = "volume.up"
 ACTION_VOLUME_DOWN = "volume.down"
@@ -28,7 +29,11 @@ ACTION_MEDIA_STOP = "media.stop"
 
 ACTION_OPEN_THING = "open.thing"
 ACTION_WEB_SEARCH = "web.search"
+ACTION_WEB_CURRENT_TIME = "web.current_time"
 ACTION_YOUTUBE_PLAY = "youtube.play"
+ACTION_WINDOW_INFO = "window.info"
+ACTION_WINDOW_CONTROL = "window.control"
+ACTION_WHATSAPP_SEND = "whatsapp.send"
 
 ACTION_ANSWER_DIRECT = "answer.direct"
 
@@ -44,6 +49,7 @@ KNOWN_ACTIONS = frozenset(
         ACTION_SLEEP,
         ACTION_LOCK,
         ACTION_APP_LAUNCH,
+        ACTION_APP_CLOSE,
         ACTION_VOLUME_UP,
         ACTION_VOLUME_DOWN,
         ACTION_VOLUME_MUTE,
@@ -55,7 +61,11 @@ KNOWN_ACTIONS = frozenset(
         ACTION_MEDIA_STOP,
         ACTION_OPEN_THING,
         ACTION_WEB_SEARCH,
+        ACTION_WEB_CURRENT_TIME,
         ACTION_YOUTUBE_PLAY,
+        ACTION_WINDOW_INFO,
+        ACTION_WINDOW_CONTROL,
+        ACTION_WHATSAPP_SEND,
         ACTION_ANSWER_DIRECT,
         ACTION_CANCEL,
     }

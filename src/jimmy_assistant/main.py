@@ -55,6 +55,8 @@ from jimmy_assistant.actions import open_things as open_actions
 from jimmy_assistant.actions import power as power_actions
 from jimmy_assistant.actions import volume as volume_actions
 from jimmy_assistant.actions import web as web_actions
+from jimmy_assistant.actions import whatsapp as whatsapp_actions
+from jimmy_assistant.actions import window_control as window_actions
 from jimmy_assistant.actions import youtube as youtube_actions
 from jimmy_assistant.actions.registry import ActionRegistry, ActionResult, ToolSchema
 from jimmy_assistant.audio.mic import MicStream
@@ -91,7 +93,7 @@ def _obj(properties: dict, required: list[str] | None = None) -> dict:
 _EMPTY = _obj({})
 
 
-def _build_registry() -> ActionRegistry:
+def _build_registry(settings: Settings) -> ActionRegistry:
     registry = ActionRegistry()
 
     # Generic direct answer / reasoning
@@ -169,6 +171,17 @@ def _build_registry() -> ActionRegistry:
             description="Launch a Windows app by name (chrome, notepad, vs code, etc.).",
             parameters=_obj(
                 {"app": {"type": "string", "description": "Application name."}},
+                required=["app"],
+            ),
+        ),
+    )
+    registry.register(
+        A.ACTION_APP_CLOSE,
+        apps_actions.close_app,
+        schema=ToolSchema(
+            description="Close a running Windows app by name (for example: edge, chrome, notepad).",
+            parameters=_obj(
+                {"app": {"type": "string", "description": "Application name to close."}},
                 required=["app"],
             ),
         ),
@@ -253,6 +266,25 @@ def _build_registry() -> ActionRegistry:
         ),
     )
     registry.register(
+        A.ACTION_WEB_CURRENT_TIME,
+        web_actions.current_time,
+        schema=ToolSchema(
+            description=(
+                "Get the current clock time for a place or IANA timezone "
+                "(for example: Indianapolis, Indiana or America/Indiana/Indianapolis)."
+            ),
+            parameters=_obj(
+                {
+                    "place": {
+                        "type": "string",
+                        "description": "City/state/country name or IANA timezone.",
+                    }
+                },
+                required=["place"],
+            ),
+        ),
+    )
+    registry.register(
         A.ACTION_YOUTUBE_PLAY,
         youtube_actions.play_on_youtube,
         schema=ToolSchema(
@@ -269,6 +301,53 @@ def _build_registry() -> ActionRegistry:
                     }
                 },
                 required=["query"],
+            ),
+        ),
+    )
+    registry.register(
+        A.ACTION_WINDOW_INFO,
+        window_actions.active_window_info,
+        schema=ToolSchema(
+            description="Return the title of the currently focused desktop window.",
+            parameters=_EMPTY,
+        ),
+    )
+    registry.register(
+        A.ACTION_WINDOW_CONTROL,
+        window_actions.control_window,
+        schema=ToolSchema(
+            description=(
+                "Control the currently focused desktop window. "
+                "Allowed operations: minimize, maximize, restore, close."
+            ),
+            parameters=_obj(
+                {
+                    "operation": {
+                        "type": "string",
+                        "description": "One of: minimize, maximize, restore, close.",
+                    }
+                },
+                required=["operation"],
+            ),
+        ),
+    )
+    registry.register(
+        A.ACTION_WHATSAPP_SEND,
+        whatsapp_actions.build_sender(
+            contacts=settings.whatsapp_contacts,
+            auto_send=settings.whatsapp_auto_send,
+        ),
+        schema=ToolSchema(
+            description=(
+                "Send a WhatsApp message to a saved contact by name. "
+                "Use this when the user asks to message someone on WhatsApp."
+            ),
+            parameters=_obj(
+                {
+                    "contact": {"type": "string", "description": "Contact name as spoken by the user."},
+                    "message": {"type": "string", "description": "Message text to send."},
+                },
+                required=["contact", "message"],
             ),
         ),
     )
@@ -320,7 +399,7 @@ class Jimmy:
                 model=settings.ollama_model,
                 timeout_seconds=settings.ollama_timeout_seconds,
             )
-        self._registry = _build_registry()
+        self._registry = _build_registry(settings)
         self._rules = RulesParser()
         self._agent: Agent | None = None  # built lazily after mic is open
         self._speaker = Speaker(
@@ -328,6 +407,7 @@ class Jimmy:
             voice_en=settings.tts_voice_en,
             voice_hi=settings.tts_voice_hi,
             rate=settings.tts_rate,
+            low_latency=settings.tts_low_latency,
             cache_dir=settings.resolve_path("models/tts_cache"),
         )
 
@@ -522,11 +602,24 @@ class Jimmy:
 
         print(f"[jimmy] agent handling: {transcript.text!r}")
         self._listener.on_status("thinking...")
-        outcome = self._agent.run(transcript.text)
+        context_text = transcript.text
+        try:
+            active = window_actions.active_window_info(Intent(name=A.ACTION_WINDOW_INFO))
+            if active.ok and active.speak_en:
+                # Give the LLM lightweight UI context for pronouns like
+                # "this window" while preserving the original user text.
+                context_text = (
+                    f"Context: {active.speak_en}\n"
+                    f"User request: {transcript.text}"
+                )
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to fetch active window context")
+
+        outcome = self._agent.run(context_text)
         speech = self._agent.final_utterance(outcome, lang=transcript.language)
         if speech:
             self._listener.on_response(speech)
-            self._speaker.speak(speech, lang=transcript.language)
+            self._speaker.speak(speech, lang=transcript.language, drop_pending=True)
 
     # -- direct dispatch (rules fast-path) ------------------------------
     def _execute_intent_directly(self, intent: Intent, lang_hint: str = "en") -> None:
@@ -584,11 +677,11 @@ class Jimmy:
             if phrase:
                 lang = "hi" if (lang_hint == "hi" and result.speak_hi) else "en"
                 self._listener.on_response(phrase)
-                self._speaker.speak(phrase, lang=lang)
+                self._speaker.speak(phrase, lang=lang, drop_pending=True)
         else:
             msg = f"Sorry, that didn't work: {result.error}"
             self._listener.on_error(result.error or "unknown error")
-            self._speaker.speak(msg, lang="en")
+            self._speaker.speak(msg, lang="en", drop_pending=True)
 
 
 # ---------------------------------------------------------------------------

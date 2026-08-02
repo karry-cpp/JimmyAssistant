@@ -75,6 +75,32 @@ _ALIASES: dict[str, str] = {
 }
 
 
+# Map launcher aliases to process image names for app-close requests.
+_PROCESS_ALIASES: dict[str, str] = {
+    "chrome": "chrome.exe",
+    "firefox": "firefox.exe",
+    "msedge": "msedge.exe",
+    "brave": "brave.exe",
+    "notepad": "notepad.exe",
+    "notepad++": "notepad++.exe",
+    "code": "Code.exe",
+    "explorer": "explorer.exe",
+    "calc": "CalculatorApp.exe",
+    "taskmgr": "Taskmgr.exe",
+    "cmd": "cmd.exe",
+    "powershell": "powershell.exe",
+    "wt": "WindowsTerminal.exe",
+    "mspaint": "mspaint.exe",
+    "spotify": "Spotify.exe",
+    "vlc": "vlc.exe",
+    "discord": "Discord.exe",
+    "steam": "steam.exe",
+    "obs": "obs64.exe",
+    "zoom": "Zoom.exe",
+    "whatsapp": "WhatsApp.exe",
+}
+
+
 def _resolve(app_name: str) -> str | None:
     key = normalize_text(app_name)
     if not key:
@@ -120,3 +146,69 @@ def launch_app(intent: Intent) -> ActionResult:
         speak_en=f"Opening {raw}.",
         speak_hi=f"{raw} khol rahi hoon.",
     )
+
+
+def _resolve_process_image(app_name: str) -> str | None:
+    resolved = _resolve(app_name)
+    if not resolved:
+        return None
+    key = resolved.strip().lower()
+    if key.endswith(":"):
+        return None
+    mapped = _PROCESS_ALIASES.get(key)
+    if mapped:
+        return mapped
+
+    # Generic fallback is intentionally narrow to avoid over-reaching on
+    # arbitrary multi-word names. Prefer explicit aliases for reliability.
+    if " " in key:
+        return None
+
+    token = key.replace(" ", "")
+    if not re.fullmatch(r"[a-z0-9._-]{1,40}", token):
+        return None
+    if token in {"jimmy", "jimmy.exe", "python", "python.exe"}:
+        return None
+    if not token.endswith(".exe"):
+        token += ".exe"
+    return token
+
+
+def close_app(intent: Intent) -> ActionResult:
+    raw = intent.slots.get("app", "").strip()
+    image = _resolve_process_image(raw)
+    if not image:
+        return ActionResult.failure(f"unknown app to close: {raw!r}")
+
+    args = ["taskkill", "/IM", image, "/T"]
+    logger.info("Closing app %r via %s", raw, args)
+    completed = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        creationflags=CREATE_NO_WINDOW,
+        shell=False,
+        check=False,
+    )
+    if completed.returncode == 0:
+        return ActionResult.success(speak_en=f"Closed {raw}.")
+
+    msg = (completed.stderr or completed.stdout or "").strip()
+    lower = msg.lower()
+    if "not found" in lower or "no running instance" in lower:
+        return ActionResult.success(speak_en=f"{raw} is not running.")
+
+    # Retry forcefully for processes that ignore graceful termination.
+    forced = subprocess.run(
+        ["taskkill", "/IM", image, "/T", "/F"],
+        capture_output=True,
+        text=True,
+        creationflags=CREATE_NO_WINDOW,
+        shell=False,
+        check=False,
+    )
+    if forced.returncode == 0:
+        return ActionResult.success(speak_en=f"Closed {raw}.")
+
+    force_msg = (forced.stderr or forced.stdout or f"exit {forced.returncode}").strip()
+    return ActionResult.failure(force_msg)

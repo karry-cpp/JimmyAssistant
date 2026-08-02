@@ -31,6 +31,8 @@ local LLM handles anything the rules don't recognise).
 | YouTube | *"play aaoge jab tum on youtube"*, *"aaoge jab tum youtube pe chala do"* |
 | Web | *"google weather in mumbai"*, *"search for python tutorials"* |
 | Open | *"open https://github.com"*, *"open the folder downloads"* |
+| Window | *"what window is open"*, *"minimize this window"*, *"maximize this"*, *"close this window"* |
+| WhatsApp | *"open whatsapp and send a message to sid original saying I'll be late"* |
 
 Everything not matched by the rules is escalated to Ollama — say a
 command in plain English or Hinglish and it will still work.
@@ -98,6 +100,9 @@ All settings can be overridden via env vars or a `.env` file. See
   `medium`, `large-v3`, `large-v3-turbo`. Default `large-v3-turbo`.
 - `JIMMY_OLLAMA_MODEL` — swap the intent LLM (e.g. `llama3.2:3b`).
 - `JIMMY_OLLAMA_ENABLED=false` — rules-only mode.
+- `JIMMY_TTS_LOW_LATENCY=false` — default: keep consistent Edge neural voice. Set `true` to start speaking faster with local SAPI5 first (lower quality / more robotic).
+- `JIMMY_WHATSAPP_CONTACTS` — contact map Jimmy can message, e.g. `sid original:+919999999999,mom:+919888888888`.
+- `JIMMY_WHATSAPP_AUTO_SEND` — `false` (default): open prefilled WhatsApp chat for review; `true`: auto-send immediately.
 - `JIMMY_CONFIRM_DESTRUCTIVE=false` — disable the "are you sure?" prompt.
 - `JIMMY_WAKE_PHRASES=hey jimmy,hi jimmy,hey jim` — customise the wake phrases.
 
